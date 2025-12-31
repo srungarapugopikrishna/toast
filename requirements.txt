@@ -6,3 +6,4 @@ librosa
 soundfile
 ffmpeg-python
 pyyaml
+moviepy
