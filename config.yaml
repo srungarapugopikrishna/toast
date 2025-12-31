@@ -1,0 +1,6 @@
+model_size: medium      # base | small | medium | large
+language: auto
+
+silence:
+  threshold: 0.02       # energy detection sensitivity
+  min_duration: 0.30    # minimum silence length in seconds

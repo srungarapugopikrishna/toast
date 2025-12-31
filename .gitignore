@@ -1,0 +1,56 @@
+# -------------------------
+# Python Generated Files
+# -------------------------
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.pdb
+*.egg-info/
+*.eggs/
+.env
+.venv/
+venv/
+env/
+.build/
+dist/
+build/
+
+# -------------------------
+# IDE / Editor Files
+# -------------------------
+.idea/
+.vscode/
+*.iml
+
+# -------------------------
+# Local Data / Results
+# -------------------------
+input/
+output/
+temp_audio.wav
+temp_clean.wav
+*.wav
+*.mp3
+*.m4a
+
+# -------------------------
+# Whisper / Model Binaries
+# (prevent pushing 2–6 GB models)
+# -------------------------
+models/
+!models/.gitkeep   # keep folder only
+
+# -------------------------
+# OS / Misc
+# -------------------------
+.DS_Store
+Thumbs.db
+*.log
+*.tmp
+
+# -------------------------
+# Docker local files (optional)
+# -------------------------
+docker-compose.override.yml
+whisper-cache/
