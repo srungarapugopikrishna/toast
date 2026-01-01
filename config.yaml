@@ -1,19 +1,16 @@
-model_size: medium
+model_size: large
 language: auto
 
 silence:
-  threshold: 0.02
-  min_duration: 0.30
+  threshold: 0.08
+  min_duration: 0.40
 
 jumpcut:
-  enabled: true            # TURN ON
-  remove_if_silence_longer_than: 1.0
-  pad_before: 0.10
-  pad_after: 0.25
-
-pad:
-  before: 0.10
-  after: 0.30
+  enabled: true
+  shrink_long_silence_sec: 1.0   # silence >= 1s → shrink
+  keep_gap_sec: 0.25              # replacement duration
+  pad_before: 0.10                # padding before speech
+  pad_after: 0.25                 # padding after speech
 
 video:
   min_clip_sec: 0.80
