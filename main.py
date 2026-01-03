@@ -6,6 +6,10 @@ from utils.audio import convert_video_to_audio, convert_to_wav
 from utils.silence import detect_silences
 from utils.transcript import transcribe_audio, save_outputs
 from utils.video_edit import build_segments, export_edited_video, get_video_length
+from utils.transcript import detect_fillers
+
+from utils.transcript import detect_fillers
+
 
 
 def is_video(path):
@@ -49,7 +53,16 @@ def process_file(input_path, cfg):
     jump_cfg = cfg.get("jumpcut", {})
     if jump_cfg.get("enabled", False) and os.path.exists(sil_csv) and is_video(input_path):
         duration = get_video_length(input_path)
-        segments = build_segments(sil_csv, duration, sentences, cfg)
+        filler_segments = detect_fillers(words, cfg)
+
+        segments = build_segments(
+            sil_csv,
+            duration,
+            sentences,
+            filler_segments,
+            cfg
+        )
+
         export_edited_video(input_path, segments, wav, out_dir)
     else:
         print("⚠️ Jumpcut disabled — original video unedited")
