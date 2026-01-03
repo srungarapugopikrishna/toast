@@ -80,3 +80,24 @@ def save_outputs(words, sentences, wav_path, out_dir):
         "sentences": sentences
     }
     json.dump(data, open(os.path.join(out_dir, "transcript.json"), "w"), indent=2)
+
+def detect_fillers(words, cfg):
+    """
+    Convert filler words into silence-like segments
+    """
+    if not cfg.get("fillers", {}).get("enabled", False):
+        return []
+
+    fillers = set(w.lower() for w in cfg["fillers"]["words"])
+    min_dur = cfg["fillers"].get("min_duration", 0.25)
+
+    filler_segments = []
+    for word, start, end, prob in words:
+        clean = word.strip().lower()
+        dur = end - start
+
+        if clean in fillers and dur >= min_dur:
+            filler_segments.append([float(start), float(end)])
+
+    print("🧹 Detected filler segments:", filler_segments)
+    return filler_segments

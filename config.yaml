@@ -15,3 +15,19 @@ jumpcut:
 video:
   min_clip_sec: 0.80
   merge_gap_sec: 0.40
+
+fillers:
+  enabled: true
+  words:
+    - um
+    - uh
+    - erm
+    - hmm
+    - ah
+    - uh-huh
+    - you know
+    - like
+    - actually
+    - basically
+  min_duration: 0.25      # seconds (ignore very short ones)
+  shrink_to: 0.08         # keep tiny gap instead of full removal

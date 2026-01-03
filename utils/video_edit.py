@@ -1,78 +1,85 @@
 import os
 import csv
 import ffmpeg
-from moviepy.editor import VideoFileClip, AudioFileClip, concatenate_videoclips, concatenate_audioclips
+from moviepy.editor import (
+    VideoFileClip,
+    AudioFileClip,
+    concatenate_videoclips,
+    concatenate_audioclips
+)
+
 
 def get_video_length(path):
     probe = ffmpeg.probe(path)
     return float(probe["format"]["duration"])
 
+
 def read_silence_csv(csv_path):
     silences = []
     with open(csv_path, newline="") as f:
         r = csv.reader(f)
-        next(r)  # skip header
+        next(r)
         for row in r:
             silences.append([float(row[0]), float(row[1])])
     return silences
 
 
-def build_segments(silence_csv, duration, sentences, cfg):
+def build_segments(silence_csv, duration, sentences, filler_segments, cfg):
     jc = cfg["jumpcut"]
-    shrink_threshold = jc.get("shrink_long_silence_sec", 1.0)
-    keep_gap = jc.get("keep_gap_sec", 0.25)
     pad_before = jc.get("pad_before", 0.10)
     pad_after = jc.get("pad_after", 0.25)
+
+    shrink_silence = jc.get("remove_if_silence_longer_than", 1.0)
+    keep_gap = jc.get("keep_gap_sec", 0.25)
+
     min_clip = cfg["video"].get("min_clip_sec", 0.80)
     merge_gap = cfg["video"].get("merge_gap_sec", 0.40)
 
-    # Build raw speech segments (from transcript)
-    speech_segments = []
-    for text, start, end in sentences:
-        start = max(0, float(start) - pad_before)
-        end = min(duration, float(end) + pad_after)
-        speech_segments.append([start, end])
+    filler_gap = cfg["fillers"].get("shrink_to", 0.08)
 
-    # Merge word-based speech segments
+    # 1️⃣ Build speech segments from transcript
+    speech = []
+    for _, start, end in sentences:
+        s = max(0, start - pad_before)
+        e = min(duration, end + pad_after)
+        speech.append([s, e])
+
+    # 2️⃣ Merge overlapping speech
     merged = []
-    for seg in sorted(speech_segments, key=lambda x: x[0]):
+    for seg in sorted(speech):
         if not merged or seg[0] > merged[-1][1]:
             merged.append(seg)
         else:
             merged[-1][1] = max(merged[-1][1], seg[1])
 
     silences = read_silence_csv(silence_csv)
-    print("🔊 Forced silences:", silences)
 
-    # Now force split merged segments using silence.csv
-    final_segments = []
-    for seg in merged:
-        seg_start, seg_end = seg
-        inside = [s for s in silences if s[0] > seg_start and s[1] < seg_end]
-
-        if not inside:
-            final_segments.append(seg)
-            continue
-
+    # 3️⃣ Apply silence + filler shrinking
+    final = []
+    for seg_start, seg_end in merged:
         cursor = seg_start
-        for sil in inside:
-            st, en = sil
+
+        cut_zones = [
+            *[s for s in silences if s[0] > seg_start and s[1] < seg_end],
+            *[f for f in filler_segments if f[0] > seg_start and f[1] < seg_end],
+        ]
+        cut_zones.sort()
+
+        for st, en in cut_zones:
             dur = en - st
-            if dur >= shrink_threshold:
-                # Add speech before silence
-                if cursor < st and (st - cursor) >= min_clip:
-                    final_segments.append([cursor, st])
+            shrink = keep_gap if dur >= shrink_silence else filler_gap
 
-                # shrink silence to small gap
-                cursor = en - keep_gap
-            # else ignore short silence fully
-        # End last section
-        if cursor < seg_end:
-            final_segments.append([cursor, seg_end])
+            if cursor < st and (st - cursor) >= min_clip:
+                final.append([cursor, st])
 
-    # Merge if two segments too close
+            cursor = max(cursor, en - shrink)
+
+        if cursor < seg_end and (seg_end - cursor) >= min_clip:
+            final.append([cursor, seg_end])
+
+    # 4️⃣ Merge close segments (prevents overlap)
     compact = []
-    for seg in final_segments:
+    for seg in final:
         if not compact or seg[0] - compact[-1][1] > merge_gap:
             compact.append(seg)
         else:
@@ -83,34 +90,30 @@ def build_segments(silence_csv, duration, sentences, cfg):
 
 
 def export_edited_video(input_video, segments, wav_path, out_dir):
-    print("🎞 Building final edited video... replacing audio track")
-
     video = VideoFileClip(input_video)
     audio = AudioFileClip(wav_path)
 
-    clips = []
-    audio_clips = []
+    vclips, aclips = [], []
+    for s, e in segments:
+        vclips.append(video.subclip(s, e))
+        aclips.append(audio.subclip(s, e))
 
-    for start, end in segments:
-        clips.append(video.subclip(start, end))
-        audio_clips.append(audio.subclip(start, end))
+    final_v = concatenate_videoclips(vclips, method="compose")
+    final_a = concatenate_audioclips(aclips)
 
-    final_video = concatenate_videoclips(clips, method="compose")
-    final_audio = concatenate_audioclips(audio_clips)
-    final = final_video.set_audio(final_audio)
+    final = final_v.set_audio(final_a)
+    out = os.path.join(out_dir, "edited_jumpcut.mp4")
 
-    output = os.path.join(out_dir, "edited_jumpcut.mp4")
     final.write_videofile(
-        output,
+        out,
         codec="libx264",
         audio_codec="aac",
         audio_bitrate="192k",
-        temp_audiofile=os.path.join(out_dir, "_temp_audio.m4a"),
-        remove_temp=True,
-        fps=video.fps
+        fps=video.fps,
+        temp_audiofile=os.path.join(out_dir, "_temp.m4a"),
+        remove_temp=True
     )
 
     video.close()
     audio.close()
-    print("🎬 Final jumpcut exported:", output)
-    return output
+    return out
