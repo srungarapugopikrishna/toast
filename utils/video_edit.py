@@ -26,9 +26,8 @@ def read_silence_csv(csv_path):
 
 def build_segments(silence_csv, duration, sentences, filler_segments, cfg):
     jc = cfg["jumpcut"]
-    pad_before = jc.get("pad_before", 0.10)
-    pad_after = jc.get("pad_after", 0.25)
 
+    pad_after = jc.get("pad_after", 0.25)
     shrink_silence = jc.get("remove_if_silence_longer_than", 1.0)
     keep_gap = jc.get("keep_gap_sec", 0.25)
 
@@ -37,14 +36,20 @@ def build_segments(silence_csv, duration, sentences, filler_segments, cfg):
 
     filler_gap = cfg["fillers"].get("shrink_to", 0.08)
 
-    # 1️⃣ Build speech segments from transcript
+    sentence_guard = cfg.get("editing", {}).get("sentence_guard_ms", 0.15)
+
+    # --------------------------------------------------
+    # 1️⃣ Build speech segments (NO pad_before EVER)
+    # --------------------------------------------------
     speech = []
     for _, start, end in sentences:
-        s = max(0, start - pad_before)
+        s = max(0.0, start)
         e = min(duration, end + pad_after)
         speech.append([s, e])
 
+    # --------------------------------------------------
     # 2️⃣ Merge overlapping speech
+    # --------------------------------------------------
     merged = []
     for seg in sorted(speech):
         if not merged or seg[0] > merged[-1][1]:
@@ -54,30 +59,53 @@ def build_segments(silence_csv, duration, sentences, filler_segments, cfg):
 
     silences = read_silence_csv(silence_csv)
 
-    # 3️⃣ Apply silence + filler shrinking
+    # --------------------------------------------------
+    # Sentence-start hard protection
+    # --------------------------------------------------
+    def touches_sentence_start(cs, ce):
+        for _, s_start, _ in sentences:
+            if cs <= s_start < ce:
+                return True
+            if abs(cs - s_start) <= sentence_guard:
+                return True
+        return False
+
+    # --------------------------------------------------
+    # 3️⃣ Apply silence + filler + repetition cuts
+    # --------------------------------------------------
     final = []
+
     for seg_start, seg_end in merged:
         cursor = seg_start
 
-        cut_zones = [
-            *[s for s in silences if s[0] > seg_start and s[1] < seg_end],
-            *[f for f in filler_segments if f[0] > seg_start and f[1] < seg_end],
-        ]
+        cut_zones = []
+
+        for s in silences:
+            if s[0] > seg_start and s[1] < seg_end:
+                if not touches_sentence_start(s[0], s[1]):
+                    cut_zones.append(s)
+
+        for f in filler_segments:
+            if f[0] > seg_start and f[1] < seg_end:
+                cut_zones.append(f)
+
         cut_zones.sort()
 
-        for st, en in cut_zones:
-            dur = en - st
+        for cs, ce in cut_zones:
+            dur = ce - cs
             shrink = keep_gap if dur >= shrink_silence else filler_gap
 
-            if cursor < st and (st - cursor) >= min_clip:
-                final.append([cursor, st])
+            if cursor < cs and (cs - cursor) >= min_clip:
+                final.append([cursor, cs])
 
-            cursor = max(cursor, en - shrink)
+            cursor = max(cursor, ce - shrink)
 
         if cursor < seg_end and (seg_end - cursor) >= min_clip:
             final.append([cursor, seg_end])
 
-    # 4️⃣ Merge close segments (prevents overlap)
+    # --------------------------------------------------
+    # 4️⃣ Merge close segments
+    # --------------------------------------------------
     compact = []
     for seg in final:
         if not compact or seg[0] - compact[-1][1] > merge_gap:

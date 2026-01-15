@@ -7,6 +7,8 @@ from utils.silence import detect_silences
 from utils.transcript import transcribe_audio, save_outputs
 from utils.video_edit import build_segments, export_edited_video, get_video_length
 from utils.transcript import detect_fillers
+from utils.repetition import detect_repetition_segments
+
 
 from utils.transcript import detect_fillers
 
@@ -53,13 +55,33 @@ def process_file(input_path, cfg):
     jump_cfg = cfg.get("jumpcut", {})
     if jump_cfg.get("enabled", False) and os.path.exists(sil_csv) and is_video(input_path):
         duration = get_video_length(input_path)
+        # filler_segments = detect_fillers(words, cfg)
+        #
+        # segments = build_segments(
+        #     sil_csv,
+        #     duration,
+        #     sentences,
+        #     filler_segments,
+        #     cfg
+        # )
+
+        # Existing filler detection
         filler_segments = detect_fillers(words, cfg)
+
+        # 🔁 NEW: continuous repetition removal
+        repetition_segments = detect_repetition_segments(
+            words,
+            max_ngram=cfg.get("repetition", {}).get("max_ngram", 4)
+        )
+
+        # Merge both as silence-like cuts
+        all_cut_segments = filler_segments + repetition_segments
 
         segments = build_segments(
             sil_csv,
             duration,
             sentences,
-            filler_segments,
+            all_cut_segments,
             cfg
         )
 
