@@ -1,5 +1,5 @@
 import ffmpeg
-import os
+
 
 def convert_video_to_audio(input_file, output='temp_audio.wav'):
     print("🎞 Extracting audio from video...")
