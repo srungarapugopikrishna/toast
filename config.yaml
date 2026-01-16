@@ -1,4 +1,4 @@
-model_size: large
+model_size: medium
 language: auto
 
 silence:
@@ -19,15 +19,34 @@ video:
 fillers:
   enabled: true
   words:
-    - um
-    - uh
-    - erm
-    - hmm
-    - ah
-    - uh-huh
-    - you know
     - like
+    - well
     - actually
     - basically
+    - literally
+    - just
+    - you know
+    - kind of
+    - sort of
+    - i mean
+    - i guess
   min_duration: 0.25      # seconds (ignore very short ones)
   shrink_to: 0.08         # keep tiny gap instead of full removal
+
+#fillers:
+#  min_duration: 0.25
+#  shrink_to: 0.08
+
+text_cleanup:
+  enabled: true
+
+  # Modes:
+  # conservative → remove only obvious fillers
+  # balanced     → recommended (default)
+  # aggressive   → maximum cleanup (may alter meaning)
+  mode: balanced
+
+  min_meaningful_words: 3
+
+editing:
+  sentence_guard_sec: 0.15
